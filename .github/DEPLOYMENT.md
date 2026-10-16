@@ -18,7 +18,7 @@ The resulting image reference is `ccr.ccs.tencentyun.com/<TCR_NAMESPACE>/<TCR_RE
 ## Publish and deploy
 
 1. Open **Actions → Build image to Tencent TCR → Run workflow** and select the repository's default branch.
-2. Wait for the build and push to succeed. Copy the image reference from the run summary.
+2. Wait for **Build and load image**, then **Push image to Tencent TCR** to succeed. The separate Docker push step shows layer progress and has a 10-minute timeout. Copy the image reference and registry digest from the run summary.
 3. In Dokploy, open the website application and select the **Docker** provider. Set its Docker Image to that reference, Registry URL to `ccr.ccs.tencentyun.com`, and supply the registry login credentials.
 4. Save and deploy manually. Verify the preview domain before switching production traffic.
 

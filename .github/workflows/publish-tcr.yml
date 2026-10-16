@@ -46,22 +46,40 @@ jobs:
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Build and push
+      - name: Build and load image
         id: build
+        timeout-minutes: 15
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: true
+          push: false
+          load: true
           tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
           provenance: false
           sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Push image to Tencent TCR
+        id: push
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -o pipefail
+          docker push "${IMAGE}:sha-${GITHUB_SHA}" | tee "$RUNNER_TEMP/tcr-push.log"
+          digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' "$RUNNER_TEMP/tcr-push.log" | tail -n 1)
+          if [[ -z "$digest" ]]; then
+            echo "::error::Push completed without a registry digest in the output"
+            exit 1
+          fi
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
       - name: Show deployment image
+        env:
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           echo "### Dokploy 部署镜像" >> "$GITHUB_STEP_SUMMARY"
-          echo '${{ env.IMAGE }}:sha-${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
-          echo "Digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "${IMAGE}:sha-${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Digest: ${IMAGE_DIGEST}" >> "$GITHUB_STEP_SUMMARY"
