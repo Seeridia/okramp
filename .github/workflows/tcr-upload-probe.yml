@@ -1,0 +1,112 @@
+name: Measure Tencent TCR upload
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tcr-upload-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ccr.ccs.tencentyun.com
+  TCR_NAMESPACE: ${{ vars.TCR_NAMESPACE }}
+  TCR_REPOSITORY: ${{ vars.TCR_REPOSITORY }}
+  IMAGE: ccr.ccs.tencentyun.com/${{ vars.TCR_NAMESPACE }}/${{ vars.TCR_REPOSITORY }}
+
+jobs:
+  probe:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Validate repository variables
+        shell: bash
+        run: |
+          for variable in TCR_NAMESPACE TCR_REPOSITORY; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Missing repository variable: $variable"
+              exit 1
+            fi
+          done
+
+      - name: Log in to Tencent TCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      - name: Build and measure fresh 8 MiB upload
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import time
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'tcr-upload-probe'
+          root.mkdir(mode=0o700, exist_ok=True)
+          payload = os.urandom(8 * 1024 * 1024)
+          (root / 'probe.bin').write_bytes(payload)
+          (root / 'Dockerfile').write_text('FROM scratch\nCOPY probe.bin /probe.bin\n')
+          tag = 'network-probe-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          image = os.environ['IMAGE'] + ':' + tag
+          subprocess.run([
+              'docker', 'buildx', 'build', '--builder', 'default',
+              '--platform', 'linux/amd64', '--provenance=false', '--load',
+              '-t', image, str(root),
+          ], check=True, timeout=60)
+
+          result = {
+              'image': image,
+              'payload_bytes': len(payload),
+              'payload_sha256': hashlib.sha256(payload).hexdigest(),
+              'runner_name': os.environ.get('RUNNER_NAME'),
+              'runner_os': os.environ.get('RUNNER_OS'),
+              'runner_arch': os.environ.get('RUNNER_ARCH'),
+              'push_timeout_seconds': 180,
+          }
+          print('Starting end-to-end push measurement: ' + image, flush=True)
+          start = time.monotonic()
+          try:
+              pushed = subprocess.run([
+                  'docker', 'push', image,
+              ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
+              output = pushed.stdout
+              result['returncode'] = pushed.returncode
+              result['status'] = 'success' if pushed.returncode == 0 else 'failed'
+          except subprocess.TimeoutExpired as error:
+              output = error.stdout or ''
+              if isinstance(output, bytes):
+                  output = output.decode('utf-8', errors='replace')
+              result['returncode'] = 124
+              result['status'] = 'timed_out'
+          result['elapsed_seconds'] = round(time.monotonic() - start, 3)
+          if result['status'] == 'success':
+              result['MiB_per_second_including_overhead'] = round(8 / result['elapsed_seconds'], 3)
+          (root / 'push.log').write_text(output)
+          (root / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+          print(output, flush=True)
+          print(json.dumps(result, indent=2), flush=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('### Fresh 8 MiB TCR upload probe\n\n```json\n')
+              summary.write(json.dumps(result, indent=2) + '\n```\n')
+          raise SystemExit(0 if result['status'] == 'success' else 1)
+          PY
+
+      - name: Save measurement and upload log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tcr-upload-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/tcr-upload-probe/result.json
+            ${{ runner.temp }}/tcr-upload-probe/push.log
+          retention-days: 7
