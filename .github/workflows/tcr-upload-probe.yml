@@ -2,6 +2,11 @@ name: Measure Tencent TCR upload
 
 on:
   workflow_dispatch:
+    inputs:
+      registry:
+        description: Registry hostname to test (empty uses TCR_REGISTRY or mainland default)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -11,10 +16,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REGISTRY: ccr.ccs.tencentyun.com
+  REGISTRY: ${{ inputs.registry || vars.TCR_REGISTRY || 'ccr.ccs.tencentyun.com' }}
   TCR_NAMESPACE: ${{ vars.TCR_NAMESPACE }}
   TCR_REPOSITORY: ${{ vars.TCR_REPOSITORY }}
-  IMAGE: ccr.ccs.tencentyun.com/${{ vars.TCR_NAMESPACE }}/${{ vars.TCR_REPOSITORY }}
+  IMAGE: ${{ inputs.registry || vars.TCR_REGISTRY || 'ccr.ccs.tencentyun.com' }}/${{ vars.TCR_NAMESPACE }}/${{ vars.TCR_REPOSITORY }}
 
 jobs:
   probe:

@@ -9,20 +9,23 @@ Under **Settings → Secrets and variables → Actions**, configure:
 | Type     | Name             | OKRamp value                                   |
 | -------- | ---------------- | ---------------------------------------------- |
 | Variable | `TCR_NAMESPACE`  | `seeridia-static`                              |
+| Variable | `TCR_REGISTRY`   | Optional; defaults to `ccr.ccs.tencentyun.com` |
 | Variable | `TCR_REPOSITORY` | `okramp`                                       |
 | Secret   | `TCR_USERNAME`   | Tencent TCR personal edition login username    |
 | Secret   | `TCR_PASSWORD`   | Tencent TCR personal edition registry password |
 
-The resulting image reference is `ccr.ccs.tencentyun.com/<TCR_NAMESPACE>/<TCR_REPOSITORY>:sha-<commit SHA>`.
+The resulting image reference is `<TCR_REGISTRY>/<TCR_NAMESPACE>/<TCR_REPOSITORY>:sha-<commit SHA>`. To use Hong Kong, set `TCR_REGISTRY` to `hkccr.ccs.tencentyun.com` after confirming that the namespace and login credentials are configured in that region. Regional registries are independent services.
 
 ## Publish and deploy
 
 1. Open **Actions → Build image to Tencent TCR → Run workflow** and select the repository's default branch.
 2. Wait for **Build and load image**, then **Push image to Tencent TCR** to succeed. The separate Docker push step shows layer progress and has a 10-minute timeout. Copy the image reference and registry digest from the run summary.
-3. In Dokploy, open the website application and select the **Docker** provider. Set its Docker Image to that reference, Registry URL to `ccr.ccs.tencentyun.com`, and supply the registry login credentials.
+3. In Dokploy, open the website application and select the **Docker** provider. Set its Docker Image to that reference, Registry URL to the selected registry hostname, and supply that region's registry login credentials.
 4. Save and deploy manually. Verify the preview domain before switching production traffic.
 
 The workflow currently runs manually and does not trigger Dokploy or change DNS/ESA. Keep previous successful image versions available for rollback; TCR personal edition limits each repository to 100 versions.
+
+For a small upload measurement, run **Measure Tencent TCR upload** with an optional `registry` input. This overrides the endpoint for that diagnostic run only and leaves the publishing configuration unchanged. The probe uploads one fresh 8 MiB layer and stops after 180 seconds if the push does not complete.
 
 ## Reuse for another website
 
