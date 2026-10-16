@@ -15,8 +15,6 @@ env:
   TCR_NAMESPACE: ${{ vars.TCR_NAMESPACE }}
   TCR_REPOSITORY: ${{ vars.TCR_REPOSITORY }}
   IMAGE: ${{ vars.TCR_REGISTRY || 'ccr.ccs.tencentyun.com' }}/${{ vars.TCR_NAMESPACE }}/${{ vars.TCR_REPOSITORY }}
-  DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
-  DOKPLOY_APPLICATION_ID: ${{ vars.DOKPLOY_APPLICATION_ID }}
 
 jobs:
   build:
@@ -28,9 +26,9 @@ jobs:
       - name: Validate repository variables
         shell: bash
         env:
-          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
         run: |
-          for variable in TCR_NAMESPACE TCR_REPOSITORY DOKPLOY_URL DOKPLOY_APPLICATION_ID DOKPLOY_API_KEY; do
+          for variable in TCR_NAMESPACE TCR_REPOSITORY DOKPLOY_WEBHOOK_URL; do
             if [[ -z "${!variable}" ]]; then
               echo "::error::Missing Actions variable or secret: $variable"
               exit 1
@@ -91,23 +89,29 @@ jobs:
       - name: Trigger Dokploy deployment
         timeout-minutes: 2
         env:
-          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
         run: |
           umask 077
           jq -n \
-            --arg applicationId "$DOKPLOY_APPLICATION_ID" \
-            --arg title "GitHub ${GITHUB_SHA:0:7}" \
-            --arg description "Image ${IMAGE}:sha-${GITHUB_SHA}; ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            '{applicationId: $applicationId, title: $title, description: $description}' \
+            --arg image "${IMAGE}:latest" \
+            --arg sha "$GITHUB_SHA" \
+            '{registry_package: {package_version: {package_url: $image, container_metadata: {tag: {name: "latest"}}}}, head_commit: {id: $sha}}' \
             > "$RUNNER_TEMP/dokploy-deploy-request.json"
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
-            -X POST "${DOKPLOY_URL%/}/api/application.deploy" \
+          # The supported registry_package payload lets Dokploy check the image and tag.
+          http_code=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+            -X POST "$DOKPLOY_WEBHOOK_URL" \
             -H "accept: application/json" \
             -H "Content-Type: application/json" \
-            -H "x-api-key: ${DOKPLOY_API_KEY}" \
+            -H "x-github-event: registry_package" \
             --data-binary "@$RUNNER_TEMP/dokploy-deploy-request.json" \
-            --output "$RUNNER_TEMP/dokploy-deploy-response.json"
-          echo "Dokploy deployment request accepted. Check Deployments for the final result."
+            --output "$RUNNER_TEMP/dokploy-deploy-response.json" \
+            --write-out '%{http_code}')
+          if [[ "$http_code" != "200" ]]; then
+            echo "::error::Dokploy webhook rejected the request (HTTP $http_code). Check Auto Deploy and the configured image/tag."
+            exit 1
+          fi
+          jq -e '.message == "Application deployed successfully"' "$RUNNER_TEMP/dokploy-deploy-response.json" > /dev/null
+          echo "Dokploy webhook deployment request accepted. Check Deployments for the final result."
 
       - name: Show deployment image
         env:
