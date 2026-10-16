@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+- docs: readme ([78fe13d](https://github.com/Seeridia/okramp/commit/78fe13d768f60280c32b2f952bbaf686d394d402))
+- chore: freeze server deployment during migration [skip ci] ([8ef7218](https://github.com/Seeridia/okramp/commit/8ef7218bad8cf424b58c0f5ccfdf823759bbd604))
+- feat: dockerfile ([a25bffe](https://github.com/Seeridia/okramp/commit/a25bffebf872500d75c9a27ea5cbec6002360394))
+- ci: make TCR publishing reusable and remove legacy deployment ([1f1e347](https://github.com/Seeridia/okramp/commit/1f1e347cc023fb0092b94f70968537219e426a24))
+- ci: separate TCR upload from image build ([93138c2](https://github.com/Seeridia/okramp/commit/93138c28a86197d7220b9f26ab66a2b9c90238cb))
+- ci: add manual TCR upload throughput probe ([7738d59](https://github.com/Seeridia/okramp/commit/7738d59e8227c7359c9a107b8626ff5d97d96350))
+- ci: support regional TCR endpoints and Hong Kong upload probe ([c745901](https://github.com/Seeridia/okramp/commit/c74590117b50708a24b8ab43df47708a8a80852d))
+- ci: deploy latest image to Dokploy after successful TCR push ([15083a8](https://github.com/Seeridia/okramp/commit/15083a81b99130c0e3c9cf48fded162235f0a6e4))
+- ci: trigger Dokploy deployments through application webhook ([190164b](https://github.com/Seeridia/okramp/commit/190164bae224f5bfeb4bc915913994e279efef8e))
+
 ## 0.4.0
 
 - docs: reorganize guides and refresh open source documentation ([315a17d](https://github.com/Seeridia/okramp/commit/315a17d2c17f706547ed0a9ac266b79fcfce43f3))
