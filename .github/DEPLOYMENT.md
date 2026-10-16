@@ -6,24 +6,29 @@ The website is built on GitHub Actions and published to Tencent TCR. Dokploy pul
 
 Under **Settings → Secrets and variables → Actions**, configure:
 
-| Type     | Name             | OKRamp value                                   |
-| -------- | ---------------- | ---------------------------------------------- |
-| Variable | `TCR_NAMESPACE`  | `seeridia-static`                              |
-| Variable | `TCR_REGISTRY`   | Optional; defaults to `ccr.ccs.tencentyun.com` |
-| Variable | `TCR_REPOSITORY` | `okramp`                                       |
-| Secret   | `TCR_USERNAME`   | Tencent TCR personal edition login username    |
-| Secret   | `TCR_PASSWORD`   | Tencent TCR personal edition registry password |
+| Type     | Name                     | OKRamp value                                               |
+| -------- | ------------------------ | ---------------------------------------------------------- |
+| Variable | `TCR_NAMESPACE`          | `seeridia-static`                                          |
+| Variable | `TCR_REGISTRY`           | Optional; defaults to `ccr.ccs.tencentyun.com`             |
+| Variable | `TCR_REPOSITORY`         | `okramp`                                                   |
+| Secret   | `TCR_USERNAME`           | Tencent TCR personal edition login username                |
+| Secret   | `TCR_PASSWORD`           | Tencent TCR personal edition registry password             |
+| Variable | `DOKPLOY_URL`            | `https://dokploy.seeridia.top`                             |
+| Variable | `DOKPLOY_APPLICATION_ID` | `-oZRJ-VD2Pk5Px-eBOG0R`                                    |
+| Secret   | `DOKPLOY_API_KEY`        | Dokploy API key with permission to deploy this application |
 
-The resulting image reference is `<TCR_REGISTRY>/<TCR_NAMESPACE>/<TCR_REPOSITORY>:sha-<commit SHA>`. To use Hong Kong, set `TCR_REGISTRY` to `hkccr.ccs.tencentyun.com` after confirming that the namespace and login credentials are configured in that region. Regional registries are independent services.
+The workflow publishes the same image as `<TCR_REGISTRY>/<TCR_NAMESPACE>/<TCR_REPOSITORY>:latest` and `:sha-<commit SHA>`. For OKRamp, `TCR_REGISTRY` is `hkccr.ccs.tencentyun.com`. Regional registries are independent services.
+
+The application ID is the service's `applicationId`, not the token at the end of its webhook URL. An API key is required for the API method; the webhook URL is not used by this workflow.
 
 ## Publish and deploy
 
-1. Open **Actions → Build image to Tencent TCR → Run workflow** and select the repository's default branch.
-2. Wait for **Build and load image**, then **Push image to Tencent TCR** to succeed. The separate Docker push step shows layer progress and has a 10-minute timeout. Copy the image reference and registry digest from the run summary.
-3. In Dokploy, open the website application and select the **Docker** provider. Set its Docker Image to that reference, Registry URL to the selected registry hostname, and supply that region's registry login credentials.
-4. Save and deploy manually. Verify the preview domain before switching production traffic.
+1. Configure the Dokploy application's **Docker** provider once: Docker Image must be `<TCR_REGISTRY>/<TCR_NAMESPACE>/<TCR_REPOSITORY>:latest`, with the selected registry hostname and credentials. Save it. The workflow does not update this setting on every run.
+2. Open **Actions → Build image to Tencent TCR → Run workflow** and select the repository's default branch.
+3. The workflow builds and loads the image, pushes its SHA tag, pushes `latest`, and confirms both tags have the same digest. Only then does it call `POST /api/application.deploy` once.
+4. Check **Dokploy → OKRamp → Deployments** for deployment completion and verify the website. A successful workflow confirms that Dokploy accepted the request, not that deployment or health checks have completed.
 
-The workflow currently runs manually and does not trigger Dokploy or change DNS/ESA. Keep previous successful image versions available for rollback; TCR personal edition limits each repository to 100 versions.
+The workflow runs manually; after a successful image push it triggers Dokploy automatically. It does not change DNS/ESA. Runs are serialized so this workflow does not overwrite `latest` concurrently. Keep previous successful SHA image tags for rollback; TCR personal edition limits each repository to 100 versions. To roll back, set the Dokploy image to the previous SHA tag and deploy; restore its image setting to `latest` before resuming automatic deployment.
 
 For a small upload measurement, run **Measure Tencent TCR upload** with an optional `registry` input. This overrides the endpoint for that diagnostic run only and leaves the publishing configuration unchanged. The probe uploads one fresh 8 MiB layer and stops after 180 seconds if the push does not complete.
 
