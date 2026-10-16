@@ -1,4 +1,4 @@
-name: Build OKRamp image to TCR
+name: Build image to Tencent TCR
 
 on:
   workflow_dispatch:
@@ -7,20 +7,32 @@ permissions:
   contents: read
 
 concurrency:
-  group: okramp-publish-tcr
+  group: publish-tcr-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   REGISTRY: ccr.ccs.tencentyun.com
-  IMAGE: ccr.ccs.tencentyun.com/${{ vars.TCR_NAMESPACE }}/okramp
+  TCR_NAMESPACE: ${{ vars.TCR_NAMESPACE }}
+  TCR_REPOSITORY: ${{ vars.TCR_REPOSITORY }}
+  IMAGE: ccr.ccs.tencentyun.com/${{ vars.TCR_NAMESPACE }}/${{ vars.TCR_REPOSITORY }}
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
+      - name: Validate repository variables
+        shell: bash
+        run: |
+          for variable in TCR_NAMESPACE TCR_REPOSITORY; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Missing repository variable: $variable"
+              exit 1
+            fi
+          done
+
       - name: Checkout
         uses: actions/checkout@v6
 
