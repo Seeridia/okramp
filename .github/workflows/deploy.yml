@@ -34,6 +34,7 @@ jobs:
       - run: vp test
       - run: vp run demo:build
       - name: Configure deployment SSH
+        if: vars.MIGRATION_FREEZE != 'true'
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -45,6 +46,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/okramp-ssh/key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/okramp-ssh/known_hosts"
       - name: Upload site assets, then switch entry page
+        if: vars.MIGRATION_FREEZE != 'true'
         env:
           DEPLOY_TARGET: deploy@121.41.122.164
           DEPLOY_PATH: /opt/1panel/www/sites/okramp.seeridia.top/index
